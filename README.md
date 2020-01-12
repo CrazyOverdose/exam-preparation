@@ -2271,13 +2271,10 @@ int main(){
 ---
 _Гонка за данными_
 
-В программировании под состоянием “гонки” понимается любая ситуация, исход которой зависит от относительного порядка выполнения операций в более чем в одном потоке.
+Иногда при работе с несколькими потоками или процессами появляется необходимость синхронизировать выполнениедвух или более из них. Причина этого чаще всего заключается в том, что два или более потоков могут требовать доступ к разделяемому ресурсу, которыйреальноне может быть предоставлен сразу нескольким потокам. Разделяемым называется ресурс, доступ к которому могут одновременно получать несколько выполняющихся задач.
+Механизм, обеспечивающий процесс синхронизации, называется ограничением доступа.Необходимость в нем возникает также в тех случаях, когда один поток ожидает события, генерируемого другим потоком. Естественно, должен существовать какой-то способ, с помощью которого первой поток будет приостановлен до совершения события. После этого поток должен продолжить свое выполнение.
 
 _Устранение гонок_
-
-Гонки приводят к ошибкам в случае, если они (гонки) приводят к нарушению инвариантов.
-Инвариант - утверждение о структуре данных, которое всегда должно быть истинным.
-
 
 Чтобы избежать проблем с синхронизацией потоков можно использовать структуры данных без блокировки.
 Т.е. изменить дизайн структуры данных и её инварианты так, чтобы модификация представляла собой последовательность неделимых изменений, каждое из которых сохраняет инварианты. Такой подход называется программированием без блокировок.
@@ -2286,60 +2283,157 @@ _Устранение гонок_
 Мьютексы - наиболее общий механизм защиты данных в С++.
 
 ```cpp
-class mutex {
-public:
-    void lock();
-    bool try_lock();
-    void unlock();
-    native_handle_type native_handle();
-};
+#include <iostream>
+#include <thread>
+#include <mutex>
 
-std::cout paper;
-std::mutex mutex;
+std::mutex g_lock;
 
-void WriteVerse() {
-  mutex.lock();
-  for (auto str : CreateVerse()) {
-    paper << str;
-  }
-  mutex.unlock();
+void threadFunction()
+{
+     g_lock.lock();
+
+     std::cout << "entered thread " << std::this_thread::get_id() << std::endl;
+
+     g_lock.unlock();
 }
 
-std::jthread Pushkin(WriteVerse);
-std::jthread Lermontov(WriteVerse);
-std::jthread Fet(WriteVerse);
+int main()
+{
+     std::thread t1(threadFunction);
+     std::thread t2(threadFunction);
+     std::thread t3(threadFunction);
+     t1.join();
+     t2.join();
+     t3.join();
+     return 0;
+}
 ```
+Перед обращением к общим данным, мьютекс должен быть заблокирован методом lock, а после окончания работы с общими данными — разблокирован методом unlock.
+Функция _lock_:
+- Если mutex в настоящее время не заблокирован ни одним потоком, вызывающий поток блокирует его
+- Если mutex  в настоящее время заблокирован тем же потоком, вызывающим эту функцию, он вызывает взаимоблокировку
+- Если mutex в  настоящее время заблокирован другим потоком, выполнение вызывающего потока блокируется, пока другой поток не будет разблокирован
 
-Необходимо освобождать мьютекс на каждом пути выхода из функции, в том числе и при исключениях. Чтобы упростить эти операции, был создан std::lock_guard
+Функция _try_lock_:
+- Если mutex в настоящее время не заблокирован ни одним потоком, вызывающий поток блокирует его
+- Если mutex в данный момент заблокирован другим потоком, функция завершается ошибкой и возвращается false без блокировки
+- Если mutex настоящее время заблокирован тем же потоком, вызывающим эту функцию, он вызывает взаимоблокировку
 
+Функция _unlock_:
+- Разблокирует mutex, освободив право собственности на него.
+
+lock_guard - это реализация принципа RAII для mutex. При создании lock_guard захватывается
+mutex, переданный ему в конструкторе. В деструкторе же происходит его освобождение.
+##### Пример
 ```cpp
-template <typename mutex_type>
-struct lock_guard {
-  explicit lock_guard( mutex_type& m );
-  lock_guard( mutex_type& m, std::adopt_lock_t t );
-  lock_guard( const lock_guard& ) = delete;
-  // ...
-};
-void WriteVerse() {
-  std::lock_guard<std::mutex> lk(mutex);
-  for (auto str : CreateVerse()) {
-    paper << str;
-  }
+#include <thread>
+#include <mutex>
+#include <iostream>
+
+int g_i = 0;
+std::mutex g_i_mutex;  // protects g_i
+
+void safe_increment()
+{
+    const std::lock_guard<std::mutex> lock(g_i_mutex);
+    ++g_i;
+
+    std::cout << std::this_thread::get_id() << ": " << g_i << '\n';
+
+    // g_i_mutex is automatically released when lock
+    // goes out of scope
+}
+
+int main()
+{
+    std::cout << "main: " << g_i << '\n';
+
+    std::thread t1(safe_increment);
+    std::thread t2(safe_increment);
+
+    t1.join();
+    t2.join();
+
+    std::cout << "main: " << g_i << '\n';
 }
 ```
 Класс std::unique_lock обладает большей гибкостью, чем std::lock_guard.
 
-- std::unique_lock реализует семантику перемещения
-- std::unique_lock позволяет управлять ассоциированным с ним мьютексом (есть методы lock, try_lock, unlock)
+_unique_lock может_:
+- принимать не захваченные mutex в конструкторе
+- захватывать и освобождать mutex неоспредственно lock/unlock/try_lock
+- выполнять временной захвата
+- может быть перемещен в другой объект unique_lock
 
-Конструкторы std::unique_lock:
-- конструктор с defer_lock_t не захватывает мьютекс
-- конструктор с try_to_lock_t пытается захватить мьютекс с помощью функции try_lock()
-- конструктор с adopt_lock_t используется в случае, если мьютекс уже захвачен текущим потоком
+То есть unique_lock может быть использован в любом контексте, в котором может быть использован
+"голый" mutex, гарантируя, при этом, что захваченный mutex будет освобожден в деструкторе.
+
+##### Пример
+```cpp
+    // unique_lock::operator= example
+    #include <iostream>       // std::cout
+    #include <thread>         // std::thread
+    #include <mutex>          // std::mutex, std::unique_lock
+
+    std::mutex mtx;           // mutex for critical section
+
+    void print_fifty (char c) {
+      std::unique_lock<std::mutex> lck;         // default-constructed
+      lck = std::unique_lock<std::mutex>(mtx);  // move-assigned
+      for (int i=0; i<50; ++i) { std::cout << c; }
+      std::cout << '\n';
+    }
+
+    int main ()
+    {
+      std::thread th1 (print_fifty,'*');
+      std::thread th2 (print_fifty,'$');
+
+      th1.join();
+      th2.join();
+
+      return 0;
+    }
+```
 
 В С++ есть функция std::lock, которая захватывает сразу несколько мьютексов.
 Если std::lock успешно захватила первый мьютекс, но во время попытки захвата второго мьютекса произошло исключение, то первый мьютекс освобождается.
+##### Пример
+```cpp
+    #include <iostream>       // std::cout
+    #include <thread>         // std::thread
+    #include <mutex>          // std::mutex, std::lock
 
+    std::mutex foo,bar;
+
+    void task_a () {
+      // foo.lock(); bar.lock(); // replaced by:
+      std::lock (foo,bar);
+      std::cout << "task a\n";
+      foo.unlock();
+      bar.unlock();
+    }
+
+    void task_b () {
+      // bar.lock(); foo.lock(); // replaced by:
+      std::lock (bar,foo);
+      std::cout << "task b\n";
+      bar.unlock();
+      foo.unlock();
+    }
+
+    int main ()
+    {
+      std::thread th1 (task_a);
+      std::thread th2 (task_b);
+
+      th1.join();
+      th2.join();
+
+      return 0;
+    } // task a  task b
+```
 #### 22. Синхронизация потоков. Состояние гонок. Классы std::recursive_mutex, boost::shared_mutex, std::unique_lock. Функция std::lock. Пример использования std::unique_lock.
 ---
 _Гонка за данными_
