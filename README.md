@@ -37,6 +37,7 @@ struct list
 struct list * init (int a) // а - значение первого узла
 {
     struct list *lst;
+    lst = (struct list*)malloc(sizeof(struct list)); //выделение памяти
     lst -> field = a;
     lst -> next = NULL; //указатель на следующий элемент (его нет)
     lst -> prev = NULL; //указатель на предыдущий элемент (его нет)
@@ -54,7 +55,8 @@ struct list * init (int a) // а - значение первого узла
 strust list * addlem (list *lst, int number)
 {
     strust list *temp;
-    strust list p;
+    temp = (struct list*)malloc(sizeof(list)); // выделение памяти
+    strust list *p;
 
     p = lst->next; //сохраение указателя на следующий узел
     lst->next = temp; // предыдущий узел указывает на вставляемый
@@ -831,7 +833,7 @@ void myswap(auto a, auto b)
 
 _decltype_ - проверяет объявленный тип объекта или тип выражения. Auto позволяет
 вам объявлять переменную с определенным типом, тогда как decltype позволяет извлекать
-тип из перпеменной, поэтому decltype является своего рода оператором, который оценивает
+тип из переменной, поэтому decltype является своего рода оператором, который оценивает
 тип переданного выражения.
 
 ###### Пример
@@ -967,7 +969,7 @@ std::string str(T t) {
 только тот блок, который подходит условию.
 #### 10. Современный С++: static_assert, initializer_list, default, final, override, using
 ---
-_Стейтмент assert_ (или ещё «оператор проверочного утверждения») в C++ — это макрос препроцессора, который обрабатывает условное выражение во время выполнения.
+_assert_ (или ещё «оператор проверочного утверждения») в C++ — это макрос препроцессора, который обрабатывает условное выражение во время выполнения.
 Если условное выражение истинно, то ничего не происходит, если ложно, то выводится сообщение об
 ошибке (содержит ложное условное выражение, имя файла и номер строки) и программа завершается.
 Объявлен в заголовочном файле <cassert>.
@@ -1072,62 +1074,318 @@ using namespace std; // использование пространства им
 #### 11. Современный С++: std::optional, std::variant, std::any, std::string_view. Примеры использования
 ---
 - Класс ```std::optional``` управляет опциональным значением, т. е. значением, которое может присутствовать или отсутствовать.
+##### Создание
 ```cpp
-std::optional<int> TryParseNumber(const std::string& str);
+// пустой:
+std::optional<int> oEmpty;
+std::optional<float> oFloat = std::nullopt;
 
-auto num = TryParseNumber("123");
-if (num) {
-  std::cout << num.value(); // или *num;
-}
-std::cout << num.value_or(0);
+// прямой:
+std::optional<int> oInt(10);
+std::optional oIntDeduced(10); // deduction guides
 
-auto num = TryParseNumber("Not number");
-if (num) {
-  std::cout << num.value(); // или *num;
-}
-std::cout << num.value_or(0);
+// make_optional
+auto oDouble = std::make_optional(3.0);
+auto oComplex = make_optional<std::complex<double>>(3.0, 4.0);
+
+// in_place
+std::optional<std::complex<double>> o7{std::in_place, 3.0, 4.0};
+
+// копирование/присваивание:
+auto oIntCopy = oInt;
 ```
-- Класс std::variant представляет собой типобезопасное объединение (union).
-```cpp
-std::variant<int, float> v;
-v = 12
-int a = std::get<int>(v);
-int b = std::get<0>(v);
+##### Cпособы получения значения:
+- value_or(default) — возвращает значение, если доступно, или же возвращает default.
+- value() — возвращает значение или бросает исключение std::bad_optional_access.
+- Использовать operator*() и operator->() так же, как в итераторах. Если объект не содержит реального значения, то поведение не определено!
 
-try {
-    std::get<float>(v);
+```cpp
+// с помощью operator*()
+std::optional<int> oint = 10;
+std::cout<< "oint " << *opt1 << '\n';
+
+// с помощью value()
+std::optional<std::string> ostr("hello");
+try
+{
+    std::cout << "ostr " << ostr.value() << '\n';
 }
-catch (const std::bad_variant_access&) {}
+catch (const std::bad_optional_access& e)
+{
+    std::cout << e.what() << "\n";
+}
+
+// с помощью value_or()
+std::optional<double> odouble; // пустой
+std::cout<< "odouble " << odouble.value_or(10.0) << '\n';
 ```
 
-- Класс ```std::any``` – типобезопасносный контейнер для одиночного значения любого типа.
+##### Некоторые функции
+- swap (обменивает содержимое)
+- reset (удалит содержимое или не сделает ничего(если пустой))
 ```cpp
-std::any value;
+int main()
+{
+std::optional <int> pr;
 
-value = 1;
-value = std::string("Something");
-value = Student{"Ivanov", "BMSTU", 2019};
-std::string name = std::any_cast<Student>(value).Name;
+pr.emplace(2);
+pr.reset(); // pr = std::nullopt
+}
+```
+- emplace (создает содержимое на месте. если содержит значение перед вызовом, содержащееся
+значение уничтожается путем вызова его деструктора)
+```cpp
+int main()
+{
+std::optional <int> pr;
+
+pr.emplace(2);
+}
 ```
 
-```std::string_view``` - это класс, не владеющий строкой, но хранящий указатель на начало строки и её размер. Таким образом мы не владеем строкой а имеем "право просмтора"
+- возможны обычные операции сравнение (небольшие проблемы, когда операнды std::nullopt)
 ```cpp
-// C++11
+#include <optional>
+#include <iostream>
+
+int main()
+{
+    std::optional<int> oEmpty;
+    std::optional<int> oTwo(2);
+    std::optional<int> oTen(10);
+
+    std::cout << std::boolalpha;
+    std::cout << (oTen > oTwo) << "\n";
+    std::cout << (oTen < oTwo) << "\n";
+    std::cout << (oEmpty < oTwo) << "\n";
+    std::cout << (oEmpty == std::nullopt) << "\n";
+    std::cout << (oTen == 10) << "\n";
+}
+ //true  // (oTen > oTwo)
+ //false // (oTen < oTwo)
+ //true  // (oEmpty < oTwo)
+ //true  // (oEmpty == std::nullopt)
+ //true  // (oTen == 10)
+```
+
+##### Пример
+```cpp
+#include <optional>
+#include <iostream>
 #include <string>
-void get_vendor_from_id(const std::string& id) { // аллоцирует память, если большой массив символов передан на вход вместо std::string
-    std::cout <<
-        id.substr(0, id.find_last_of(':')); // аллоцирует память при создании больших подстрок
+
+std::optional<int> ParseInt(char*arg)
+{
+    try
+    {
+        return { std::stoi(std::string(arg)) };
+    }
+    catch (...)
+    {
+        std::cout << "cannot convert \'" << arg << "\' to int!\n";
+    }
+
+    return { };
 }
-```
-```cpp
-// C++17
-#include <string_view>
-void get_vendor_from_id(std::string_view id) { // не аллоцирует память, работает с `const char*`, `char*`, `const std::string&` и т.д.
-    std::cout <<
-        id.substr(0, id.find_last_of(':')); // не аллоцирует память для подстрок
+
+int main(int argc, char* argv[])
+{
+    if (argc >= 3)
+    {
+        auto oFirst = ParseInt(argv[1]);
+        auto oSecond = ParseInt(argv[2]);
+
+        if (oFirst && oSecond)
+        {
+            std::cout << "sum of " << *oFirst << " and " << *oSecond;
+            std::cout << " is " << *oFirst + *oSecond << "\n";
+        }
+    }
 }
 ```
 
+- Класс std::variant представляет собой union, который помнит, какой тип он хранит.
+##### Некоторые функции
+- get (получение значений из std::variant. Она выбросит исключение std::bad_variant_access, если попытаться взять не тот тип.)
+
+```cpp
+#include <iostream>
+#include <variant>
+
+int main()
+{
+  // хранит или int, или float или char.
+  std::variant<int, float, char> v;
+  v = 3.14f;
+  v = 42;
+  std::cout << std::get<int>(v);
+  //std::cout << std::get<float>(v); // std::bad_variant_access
+  //std::cout << std::get<char>(v); // std::bad_variant_access
+  //std::cout << std::get<double>(v); // compile-error
+  return 0;
+}
+```
+- get_if (принимает указатель на std::variant и возвращает указатель на текущее значение, если тип был указан правильно, и nullptr в противном случае)
+```cpp
+#include <iostream>
+#include <variant>
+
+int main()
+{
+  std::variant<int, float, char> v;
+  v = 42;
+  auto ptr = std::get_if<int>(&v);
+  if (ptr != nullptr)
+  {
+    std::cout << "int value: " << *ptr << '\n'; // int value: 42
+  }
+
+  return 0;
+}
+```
+- visit (вызывает предоставленный функтор с агрументами, сожержащимися
+в одной или нескольких вариантах)
+
+```cpp
+#include <iostream>
+#include <variant>
+
+int main()
+{
+  std::variant<int, float, char> v;
+  v = 42;
+
+  std::visit([](auto& arg)
+  {
+    using Type = std::decay_t<decltype(arg)>; //сам тип определяет
+    if constexpr (std::is_same_v<Type, int>)
+    {
+      std::cout << "int value: " << arg << '\n';
+    }
+    else if constexpr (std::is_same_v<Type, float>)  //если одинаковый тип, то True
+    {
+      std::cout << "float value: " << arg << '\n';
+    }
+    else if constexpr (std::is_same_v<Type, char>)
+    {
+      std::cout << "char value: " << arg << '\n';
+    }
+  }, v);
+
+  return 0;
+}
+```
+
+- Класс ```std::any``` – контейнер с безопасным типом для хранения одного значения любого типа. НЕ производит никаких приведений типов, что позволяет избежать неоднозначности.
+_Cоздание_
+```cpp
+#include <any>
+
+any var = object/value; //копировать инициализицаю
+any var (object/value); // параметризированный конструктор
+
+any var;
+var = object/value; // использование оператора присваивания
+```
+##### Функции
+- type (прежоставляет информацию о хранящемся типе)
+```cpp
+#include <any>
+
+int main()
+{
+  std::any a = 42;
+  std::cout << a.type().name() << '\n'; // Напечатает "int"
+
+  return 0;
+}
+```
+
+- any_cast (доступ к информации, хранящейся в объекте any)
+```cpp
+#include <iostream>
+#include <string>
+#include <any>
+
+int main()
+{
+  std::any a = 42;
+  std::cout << std::any_cast<int>(a) << '\n';
+
+  a = 11.34f;
+  std::cout << std::any_cast<float>(a) << '\n';
+
+  a = std::string{ "hello" };
+  std::cout << std::any_cast<std::string>(a) << '\n';
+
+  return 0;
+}
+```
+- has_value (проверяет, сожержит ли объект значение)
+- reset (уничтожает содержащийся объект)
+```cpp
+#include <any>
+#include <iostream>
+
+int main()
+{
+
+    // any type
+    std::any a = 1;
+
+    if (a.has_value())
+    {
+        std::cout << a.type().name() << '\n';
+    }
+
+    // reset
+    a.reset();
+    if (!a.has_value())
+    {
+        std::cout << "no value\n";
+    }
+}
+```
+```std::string_view``` - это класс, не владеющий строкой, но хранящий указатель на начало строки и её размер. Таким образом мы не владеем строкой, а имеем "право просмотра". Функция будет работать как с аргументами const char*, так и string без выделения памяти со стороны программы.
+
+##### Подключение
+```cpp
+#include <string_view>
+```
+Он может выполнять некоторые функции обычного string
+```cpp
+- substr (возвращает подстроку)
+std::string str = "lllloooonnnngggg sssstttrrriiinnnggg"; //A really long string
+
+//Bad way - 'string::substr' returns a new string (expensive if the string is long)
+std::cout << str.substr(15, 10) << '\n';
+
+//Good way - No copies are created!
+std::string_view view = str;
+
+// string_view::substr returns a new string_view
+std::cout << view.substr(15, 10) << '\n';
+```
+- copy (копирует символы )
+- find (поиск символов)
+- swap (обмен сожержимым)
+
+##### Другой пример
+```cpp
+#include <iostream>
+#include <string>
+
+int main()
+{
+  char text[]{ "hello" };
+  std::string str{ text };
+  std::string more{ str };
+
+  std::cout << text << ' ' << str << ' ' << more << '\n'; // hello hello hello
+
+  return 0;
+}
+```
 #### 12. Лямбда-функции, функторы, указатели на функции, std::functional. Примеры использования std::functional. Примеры использования лямбда-функций.
 ---
 _Лямбда-выражениями_ называются безымянные локальные функции, которые можно создавать прямо внутри какого-либо выражения.(лямбда-выражения в C++ — это краткая форма записи анонимных функторов.) По умолчанию лямба-функции возвращают void, однако при наличии одного return в лямбда-выражении, компилятор вычисляет тип возвращаемого значения самостоятельно. Если же в лямбда-выражении присутствует if или switch (или другие сложные конструкции) то надо указывать возвращаемый тип самостоятельно ```[] (int _n) -> double```
