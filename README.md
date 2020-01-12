@@ -1954,9 +1954,9 @@ std::cout << "New thread id: 0x" << std::hex << thread.get_id() << "\n";
 auto days = std::chrono::system_clock::now() + std::chrono::hours(72);
 std::this_thread::sleep_until(days);
 std::this_thread::sleep_for(std::chrono::hours(72));
+//Обе функции кладут поток в сон на 3 дня.
 ```
-Обе функции кладут поток в сон на 3 дня.
-
+##### Пример
 ```cpp
 #include <iostream>
 #include <thread>
