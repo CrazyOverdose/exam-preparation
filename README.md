@@ -2872,40 +2872,205 @@ int main ()
 #### 26. Атомарные операции. Классы std::atomic, std::atomic_flag. Примеры работы с std::atomic
 ---
 Под атомарными понимаются неделимые операции. Ни из одного потока в системе невозможно увидеть, что такая операция выполнена наполовину – она либо выполнена целиком, либо не выполнена вовсе. Если операция загрузки, которая читает значение объекта, атомарна, и все операции модификации этого объекта также атомарны, то в результате загрузки будет получено либо начальное значение объекта, либо значение, сохраненное в нем после одной из модификаций.
-
+Атомарная загрузка гарантирует, что переменная будет загружена целиком в один момент. Примерами
+является инкремент, чтение,запись и т.д.
+Всё, что ограждено mutex можно считать атомарной операцией, так как никто не может попасть в блок,
+огражденный mutex, но это довольно неэффективно и небезопасно.
 Каждая специализация шаблона ```std::atomic``` определяет атомарный тип. Только объекты атомарных С++ типов могут безопасно использоваться в нескольких потоках одновременно. Когда один поток сохраняет данные в объекте атомарного типа, а другой хочет их прочитать, поведение программы определено стандартом.
-
+_std::atomic<T>_ имеет базовые операции:
+- is_lock_free (проверяет, не заблокированы атомарные операции со всеми объектами этого типа)
+- store или operator=() (кладет новое значение в объект)
+- load или operator T() (извлекает значение из объекта)
+- exchange (заменяет значение в объекте на новое и возвращает старое)
+##### Реализация is_lock_free
 ```cpp
-Typedef имя		Full specialization
-std::atomic_char 	std::atomic<char>
-std::atomic_schar 	std::atomic<signed char>
-std::atomic_uchar 	std::atomic<unsigned char>
-std::atomic_short 	std::atomic<short>
-std::atomic_ushort 	std::atomic<unsigned short>
-std::atomic_int 	std::atomic<int>
-std::atomic_uint 	std::atomic<unsigned int>
-std::atomic_long 	std::atomic<long>
+#include <iostream>
+#include <utility>
+#include <atomic>
 
-```
-
-```std::atomic_flag``` - это по настоящему простой булевский флаг, а операции над этим типом обязаны быть свободными от блокировок, если имеется простой свободный от блокировок булевский флаг, то на его основе можно реализовать простую  блокировку и, значит, все остальные атомарные типы.
-
-Объект типа ```std::atomic_flag``` должен быть инициализирован значением ```ATOMIC_FLAG_INIT```.
-
-Пример использования ```std::atomic_flag```:
-```
-class spinlock_mutex {
-  std::atomic_flag  flag;
-public: spinlock_mutex(): flag(ATOMIC_FLAG_INIT)  {}
-  void  lock() {
-    while(flag.test_and_set(std::memory_order_acquire));
+struct A { int a[100]; };
+struct B { int x, y; };
+int main()
+{
+    std::cout << std::boolalpha
+              << "std::atomic<A> is lock free? "
+              << std::atomic<A>{}.is_lock_free() << '\n' //false
+              << "std::atomic<B> is lock free? "
+              << std::atomic<B>{}.is_lock_free() << '\n'; //true
 }
-  void  unlock() {
-    flag.clear(std::memory_order_release);
-  }
+```
+_std::atomic<integral>_ включает в себя все интегральные типы, существующие в С++
+(char, int, long, short и их разные формы)
+
+Дополнительные операции:
+- fetch_add(object, value) – атомарно помещает сумму (object + value) в object.
+- fetch_sub(object, value) – атомарно помещает (object – value) в object.
+- fetch_and(object, value) – атомарно помещает (object & value) в object.
+- fetch_or(object, value) – атомарно помещает (object | value) в object.
+- fetch_xor(object, value) – атомарно помещает (object ^ value) в object.
+
+##### Реализация fetch_add
+```cpp
+#include <iostream>
+#include <thread>
+#include <atomic>
+
+std::atomic<long long> data;
+void do_work()
+{
+    data.fetch_add(1, std::memory_order_relaxed);
+}
+
+int main()
+{
+    std::thread th1(do_work);
+    std::thread th2(do_work);
+    std::thread th3(do_work);
+    std::thread th4(do_work);
+    std::thread th5(do_work);
+
+    th1.join();
+    th2.join();
+    th3.join();
+    th4.join();
+    th5.join();
+
+    std::cout << "Result:" << data << '\n'; // 5
+}
+```
+##### Общий пример
+```cpp
+#include <iostream>       // std::cout
+#include <atomic>         // std::atomic, std::atomic_flag, ATOMIC_FLAG_INIT
+#include <thread>         // std::thread, std::this_thread::yield
+#include <vector>         // std::vector
+
+std::atomic<bool> ready (false);
+std::atomic_flag winner = ATOMIC_FLAG_INIT;
+
+void count1m (int id) {
+  while (!ready) { std::this_thread::yield(); }      // wait for the ready signal
+  for (volatile int i=0; i<1000000; ++i) {}          // go!, count to 1 million
+  if (!winner.test_and_set()) { std::cout << "thread #" << id << " won!\n"; }
 };
 
+int main ()
+{
+  std::vector<std::thread> threads;
+  std::cout << "spawning 10 threads that count to 1 million...\n";
+  for (int i=1; i<=10; ++i) threads.push_back(std::thread(count1m,i));
+  ready = true;
+  for (auto& th : threads) th.join();
+
+  return 0;
+}
 ```
+
+```std::atomic_flag``` - простейший атомарный объект, представляющий собой булев флаг. Он единственный
+_гарантировано_ является свободным от блокировок, то есть по стандарту все операции над объектом
+типа atomic_flag являются чисто атомарными, без каких-то условностей.
+_atomic_flag_ содержит всего две операции:
+- clear (атомарно устанавливает флаг на false)
+- test_and_set (атомарно устанавливает флаг на true и возвращает начальное состояние флага)
+
+Важным свойством atomic_flag является неопределенность при создании, то есть стандарт не оговаривает
+в каком состоянии находится флаг, ежели он не инициализирован. Поэтому, для получения предсказуемого результата
+есть смысл всегда инициализировать флаг с помощью макроса ATOMIC_FLAG_INIT (тогда он _гарантировано
+станет сброшенным)
+##### ИНициализация флага
+```cpp
+std::atomic_flag flag = ATOMIC_FLAG_INIT;
+```
+
+##### Пример  ```std::atomic_flag```:
+```cpp
+#include <iostream>       // std::cout
+#include <atomic>         // std::atomic_flag
+#include <thread>         // std::thread
+#include <vector>         // std::vector
+#include <sstream>        // std::stringstream
+
+std::atomic_flag lock_stream = ATOMIC_FLAG_INIT;
+std::stringstream stream;
+
+void append_number(int x) {
+  while (lock_stream.test_and_set()) {} //возвращет прежнее значение false, означающее
+  stream << "thread #" << x << '\n';    //что в это потоке значение флага установлено true
+  lock_stream.clear();
+}
+
+int main ()
+{
+  std::vector<std::thread> threads;
+  for (int i=1; i<=10; ++i) threads.push_back(std::thread(append_number,i));
+  for (auto& th : threads) th.join();
+
+  std::cout << stream.str();
+  return 0;
+}
+```
+Чтобы структура данных считалась свободной от блокировок, она должна быть открыта для одновременного
+доступа со стороны сразу нескольких потоков. Не требуется, чтобы потоки могли выполнять одну и ту
+же операцию, свободная от блокироки очередь может позволять одному потоку помещать,а
+другому - извлекать данные, но запрещать одновременное добавление данных со стороны двух потоков.
+Более того, если один из потоков, обращающихся к структуре данных, будет приостановлен планировщиком в середине
+операции, то остальные должны иметь возможность завершить операцию, не дожидаясь возобновления
+приостановленного потока. Одним из примеров структур данных без блокировки - atomic_flag и lock-free stack.
+
+_Lock_free Stack_ или потокобезопасный стек без блокировок
+Основное свойство стека - элементы извлекаются в порядке, обратном тому, в котором помещались,  то есть
+последним пришел - первыйм ушел (LIFO). ВАжно убедиться, что после добавления значения в стек
+оно может быть сразу же безопасно извлечено другим потоков, что только один поток получает значение.
+Простейшая реализация стека основана на связном списке.
+Схема добавления узла:
+- создать новый узел
+- записать в его указатель next текущее положение head
+- записать head указатель на новый узел
+ВСе это прекрасно работает с одним потоком, но, когдас стек могут модифицировать сразу несколько
+потоков, этого недостаточно. ЕСли узлы добавляют два потока, то между шагами 2 и 3 возможна гонка.
+Следует использовать атомарную операцию сравнить-и-обменять на шаге 3, гарантирующую, что head не был
+модифицирован с момента чтения на шаге 2. Если был, то следует вернуться в начало цикла и покторить.
+Схема извлечения узла:
+- прочитать текущее значени head
+- прочитать head->next
+- записать в head значение head->next
+- вернуть поле data, хранящееся в извлеченном узле node
+- удалить извлеченый узел
+НАличие нескольких потоков усложняет дело.
+
+##### Реализация lock-free Stack
+```cpp
+template<typename T>
+class lock_free_stack {
+private:
+ struct node
+ {
+    std::shared_ptr<T> data; //не возбуждает исключения, поэтому pop() безопасна
+    node* next;
+    node(T const& data_) : data(std::make_shared<T>(data)) //создаем shared_ptr для только что выделенного Т, выделяем память
+    {}
+
+ };
+
+ std::atomic<node*> head;
+
+ public:
+  void push(T const& data) {
+   node* const new_node = new node(data);
+   new_node->next = head.load();
+   while (!head.compare_exchange_weak(new_node->next, new_node));
+  } //проверяет, что указатель head по прежнему содержит значени, которое было сохранено в new_node->next и если это так, то записывает его в new_node
+
+   std::shared_ptr<T> pop()
+   {
+   node* old_head = head.load();
+   while (old_head && !head.compare_exchange_weak(old_head, old_head->next)); //проверяем old_head на нуль
+     return old_head ? old_head->data : std::shared_ptr<T>();
+   } // возвращаем либо нудевой указатель, либо ассоциированные с узлом данные
+};
+```
+
+
 
 #### 27. Шаблоны проектирования: фабричный метод. Пример реализации «простой фабрики» и «фабричного метода».
 ---
