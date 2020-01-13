@@ -1352,8 +1352,9 @@ int main()
 #include <string_view>
 ```
 Он может выполнять некоторые функции обычного string
-```cpp
+
 - substr (возвращает подстроку)
+```cpp
 std::string str = "lllloooonnnngggg sssstttrrriiinnnggg"; //A really long string
 
 //Bad way - 'string::substr' returns a new string (expensive if the string is long)
