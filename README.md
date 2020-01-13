@@ -3297,32 +3297,35 @@ _Простая фабрика_ - это класс, в котором есть 
 
 ##### Пример`
 ```cpp
+#include <vector>
+#include <iostream>
+
+class Horseman
+{
+  public:
+    void info() {
+      std::cout << "Horseman" << std::endl; };
+};
+
+
 class Factory
 {
   public:
-    createWarrior()
+    Horseman* createWarrior()
     {
           return new Horseman;
     }
     virtual ~Factory() {}
 };
 
-class Horseman
-{
-  public:
-    void info() {
-      cout << "Horseman" << endl; };
-};
-
 // Создание объектов при помощи фабрик объектов
 int main()
 {
     Factory* myfactory = new Factory;
-    vector<Factory*> v;
-    v.push_back(myfactory->createWarrior());
+    std::vector<Horseman*> v;
+    v.push_back()myfactory->createWarrior();
 
-    v[0]->info();
-
+        v[0]->info();
 }
 ```
 #### 28. Шаблоны проектирования: observer. Пример реализации «обозреватель».
