@@ -2918,7 +2918,7 @@ _std::atomic<integral>_ включает в себя все интегральн
 std::atomic<long long> data;
 void do_work()
 {
-    data.fetch_add(1, std::memory_order_relaxed);
+    data.fetch_add(1);
 }
 
 int main()
