@@ -977,7 +977,7 @@ _assert_ (или ещё «оператор проверочного утверж
 
 _static_assert_ - во время компиляции. (Поскольку static_assert не обрабатывается во время компиляции, то стейтменты static_assert могут быть размещены в любом месте кода (даже в глобальном пространстве))
 ```cpp
-static_assert(sizeof(long) == 8, "long must be 8 bytes"); // тут будет ошибка
+static_assert(sizeof(long) == 234, "long must be 8 bytes"); // тут будет ошибка
 static_assert(sizeof(int) == 4, "int must be 4 bytes");
 ```
 _initializer_list_ - список инициализации. Вы должны указать в угловых скобках, какой тип данных будете использовать
