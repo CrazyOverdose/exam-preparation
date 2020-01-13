@@ -3330,89 +3330,106 @@ int main()
 ```
 #### 28. Шаблоны проектирования: observer. Пример реализации «обозреватель».
 ---
-_Наблюдатель (англ. Observer)_ — поведенческий шаблон проектирования. Также известен как «подчинённые» (Dependents). Реализует у класса механизм, который позволяет объекту этого класса получать оповещения об изменении состояния других объектов и тем самым наблюдать за ними
-
 _Observer_ — поведенческий шаблон проектирования. Реализует у класса механизм, который позволяет объекту этого класса получать оповещения об изменении состояния других объектов и тем самым наблюдать за ними.
+ПАттерн НАблюдатель включает в себя два компонента:
+- источник
+- наблюдатель
+Количество наблюдателей одновременно взаимодействующих с источником не ограничено. ПРичем, в одному и
+тому же источнику могут быть подключены объекты Наблюдатели как из одного класса, так и из
+разных.
+Шаблон «наблюдатель» применяется в тех случаях, когда система обладает следующими свойствами:
+- существует, как минимум, один объект, рассылающий сообщения
+- имеется не менее одного получателя сообщений, причём их количество и состав могут изменяться во время работы приложения
+- нет надобности очень сильно связывать взаимодействующие объекты, что полезно для повторного использования.
 
-Реализация:
+Данный шаблон _часто применяют в ситуациях_, в которых отправителя сообщений не интересует, что делают получатели с предоставленной им информацией.
+
+Реализация паттерна Observer по шагам:
+- моделируйте "независимую" функциональность с помощью абстракции "субъект".
+- Смоделируйте "зависимую" функциональность с помощью иерархии "наблюдатель".
+- Класс Subject связан только c базовым классом Observer.
+- Наблюдатели регистрируются у субъекта.
+- Субъект извещает всех зарегистрированных наблюдателей.
+- Наблюдатели "вытягивают" необходимую им информацию от объекта Subject.
+- Клиент настраивает количество и типы наблюдателей.
+
+##### Реализация
 ```cpp
-class SupervisedString;
-class IObserver
-{
-public:
-    virtual void handleEvent(const SupervisedString&) = 0;
+#include <iostream>
+#include <vector>
+using namespace std;
+
+// 1. "Независимая" функциональность
+class Subject {
+    // 3. Связь только базовым классом Observer
+    vector < class Observer * > views;
+    int value;
+  public:
+    void attach(Observer *obs) {
+        views.push_back(obs);
+    }
+    void setVal(int val) {
+        value = val;
+        notify();
+    }
+    int getVal() {
+        return value;
+    }
+    void notify();
 };
 
-class SupervisedString // Observable class
-{
-    string _str;
-    list<IObserver*> _observers;
-
-    void _Notify()
-    {
-        for(auto& observer: _observers)
-        {
-            observer->handleEvent(*this);
-        }
+// 2. "Зависимая" функциональность
+class Observer {
+    Subject *model;
+    int denom;
+  public:
+    Observer(Subject *mod, int div) {
+        model = mod;
+        denom = div;
+        // 4. Наблюдатели регистрируются у субъекта
+        model->attach(this);
     }
-
-public:
-    void add(IObserver& ref)
-    {
-        _observers.push_back(&ref);
+    virtual void update() = 0;
+  protected:
+    Subject *getSubject() {
+        return model;
     }
-
-    void remove(IObserver& ref)
-    {
-        _observers.remove(&ref);
-    }
-
-    const string& get() const
-    {
-        return _str;
-    }
-
-    void reset(string str)
-    {
-        _str = str;
-        _Notify();
-    }
-};
-
-class Reflector: public IObserver // Prints the observed string into cout
-{
-public:
-    virtual void handleEvent(const SupervisedString& ref)
-    {
-        std::cout << ref.get() << std::endl;
+    int getDivisor() {
+        return denom;
     }
 };
 
-class Counter: public IObserver // Prints the length of observed string into cout
-{
-public:
-  virtual void handleEvent(const SupervisedString& ref)
-  {
-      std::cout << "length = " << ref.get().length() << std::endl;
-  }
+void Subject::notify() {
+  // 5. Извещение наблюдателей
+  for (int i = 0; i < views.size(); i++)
+    views[i]->update();
+}
+
+class DivObserver: public Observer {
+  public:
+    DivObserver(Subject *mod, int div): Observer(mod, div){}
+    void update() {
+        // 6. "Вытягивание" интересующей информации
+        int v = getSubject()->getVal(), d = getDivisor();
+        cout << v << " div " << d << " is " << v/d << '\n';
+    }
 };
 
-int main()
-{
-    SupervisedString str;
-    Reflector refl;
-    Counter cnt;
+class ModObserver: public Observer {
+  public:
+    ModObserver(Subject *mod, int div): Observer(mod, div){}
+    void update() {
+        int v = getSubject()->getVal(), d = getDivisor();
+        cout << v << " mod " << d << " is " << v%d << '\n';
+    }
+};
 
-    str.add(refl);
-    str.reset("Hello, World!");
-    std::cout << endl;
-
-    str.remove(refl);
-    str.add(cnt);
-    str.reset("World, Hello!");
-    std::cout << endl;
-
-    return 0;
+int main() {
+  Subject subj;
+  DivObserver divObs1(&subj, 4); // 7. Клиент настраивает число и типы наблюдателей
+  DivObserver divObs2(&subj, 3); //    и типы наблюдателей
+  ModObserver modObs3(&subj, 3);
+  subj.setVal(14);
 }
 ```
 
@@ -3527,7 +3544,6 @@ int main(void) {
     PrintTwoNumbers(&meaningOfLife);
     return 0;
 }
-
 ```
 
 #### 30. Шаблоны проектирования: синглтон. Пример реализации Синглтона.
