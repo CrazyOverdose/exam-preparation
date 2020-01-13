@@ -3825,7 +3825,6 @@ int meaningOfLife(void) {
 
 /* Here we call PrintTwoNumbers() with three different callbacks. */
 int main(void) {
-    PrintTwoNumbers(&rand);
     PrintTwoNumbers(&overNineThousand);
     PrintTwoNumbers(&meaningOfLife);
     return 0;
