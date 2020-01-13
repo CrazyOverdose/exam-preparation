@@ -1300,7 +1300,6 @@ int main()
   return 0;
 }
 ```
-
 - any_cast (доступ к информации, хранящейся в объекте any)
 ```cpp
 #include <iostream>
