@@ -1525,7 +1525,7 @@ void smaller (int d)
 {
     if (d < 17)
     {
-    std::cout << d << std:: endl;
+    std::cout << d << "  ";
     }
 }
 
@@ -1533,24 +1533,24 @@ void divided (int d)
 {
     if (d % 3 == 0)
     {
-    std::cout << d << std:: endl;
+    std::cout << d << "  ";
     }
 }
 
-void work (vector <int> v,  std::function <void(int)> f)
+void work (std::vector <int> v,  std::function <void(int)> f)
 {
     for (auto x : v)
     {
-    f(v);
+    f(x);
     }
 }
 
 int main()
 {
-    std::vector <int> te = {45,77,99,2,3,56,12,556,43,765,23}
+    std::vector <int> te = {45,77,99,2,3,56,12,556,43,765,23};
 
     work(te, divided);
-
+    std::cout << std::endl;
     work(te, smaller);
 }
 ```
